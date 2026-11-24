@@ -142,7 +142,7 @@ test('wrong confirmation stays in the dialog; closing during verification does n
   assert.equal(creations, 0); assert.equal(ui.name.value, 'My Bitwarden key');
 });
 
-test('passkey confirmation submits a second-factor code when enabled', async () => {
+test('passkey confirmation needs neither the password nor the authenticator code', async () => {
   let confirmed = false; /** @type {any} */ let assertionProof = /** @type {any} */ (undefined); let creations = 0;
   testNavigator.credentials.create = async () => { creations++; return credential; };
   testNavigator.credentials.get = async () => credential;
@@ -160,14 +160,14 @@ test('passkey confirmation submits a second-factor code when enabled', async () 
   ui.modal.code.value = '123456';
   browser.__constraintErrors = /** @param {any} form */ form => {
     if (form === ui.modal.form) {
-      assert.equal(ui.modal.code.required, true, 'passkey confirmation still requires the code');
+      assert.equal(ui.modal.code.required, false, 'passkey confirmation skips the code input');
       assert.equal(ui.modal.password.required, false);
     }
     return [];
   };
   try { ui.modal.passkey.handlers.click(); await pending; }
   finally { delete browser.__constraintErrors; }
-  assert.equal(assertionProof.method, 'passkey'); assert.equal(assertionProof.code, '123456');
+  assert.equal(assertionProof.method, 'passkey'); assert.equal(assertionProof.code, undefined);
   assert.equal(assertionProof.credential.id, encoded); assert.equal(assertionProof.password, undefined);
   assert.equal(creations, 1);
 });

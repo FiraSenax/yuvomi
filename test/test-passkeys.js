@@ -310,15 +310,16 @@ test('HTTP enrollment and sign-in preserve CSRF, session, policy, account and 2F
     assert.ok(normalSession.cookie.originalMaxAge > 5 * 60_000, 'successful proof starts the normal session lifetime');
     assert.equal((await route('/me')).data.user.id,person.id);
     const row = passkeys.list(database,person.id)[0];
-    // A verified passkey must go through the existing second-factor challenge.
+    // An enrolled passkey with verified UV satisfies MFA even with TOTP enabled.
     database.prepare("INSERT INTO user_totp (user_id, secret, confirmed_at) VALUES (?, 'JBSWY3DPEHPK3PXP', '2026-01-01')").run(person.id);
     await route('/logout','POST',{});
     let next = (await route('/passkeys/login/options','POST',{})).data.data;
     response = await route('/passkeys/login/verify','POST',{credential:assertion(next,device,options.user.id,{counter:2})});
     assert.equal(response.status,200);
-    assert.equal(response.data.twoFactorRequired,true);
-    assert.equal((await route('/me')).status,401);
-    assert.equal((await call('/__test/proof')).data.mfaVerifiedAt,undefined);
+    assert.equal(response.data.user.id, person.id);
+    assert.equal(response.data.twoFactorRequired, undefined);
+    assert.equal((await route('/me')).data.user.id, person.id);
+    assert.ok((await call('/__test/proof')).data.mfaVerifiedAt);
     await route('/logout','POST',{});
     database.prepare('DELETE FROM user_totp WHERE user_id = ?').run(person.id);
     // A valid credential never reactivates a deactivated account.
@@ -421,8 +422,14 @@ test('HTTP inline reauth refreshes only after correct proof and preserves identi
     await checkStale();
     const recovery = regenerateRecoveryCodes(database, person.id).recovery_codes[0];
     options = (await route('/passkeys/reauth/options', 'POST', {})).data.data;
-    assert.equal((await route('/passkeys/reauth/verify', 'POST', {method:'passkey', credential:assertion(options, own.device, null, {counter:2}), code:recovery})).status, 200);
-    assert.ok(database.prepare('SELECT used_at FROM user_recovery_codes WHERE user_id = ? AND code_hash = ?').get(person.id, (await import('../server/utils/totp.js')).hashRecoveryCode(recovery)).used_at, 'a recovery code is spent by successful confirmation');
+    assert.equal((await route('/passkeys/reauth/verify', 'POST', {method:'passkey', credential:assertion(options, own.device, null, {counter:2})})).status, 200);
+    const codeState = database.prepare('SELECT used_at FROM user_recovery_codes WHERE user_id = ? AND code_hash = ?');
+    const recoveryHash = (await import('../server/utils/totp.js')).hashRecoveryCode(recovery);
+    assert.equal(codeState.get(person.id, recoveryHash).used_at, null, 'passkey confirmation leaves recovery codes available');
+    assert.ok((await call('/__test/proof')).data.mfaVerifiedAt);
+    await call('/__test/stale', 'POST', {});
+    assert.equal((await route('/passkeys/reauth/verify', 'POST', {method:'password', password, code:recovery})).status, 200);
+    assert.ok(codeState.get(person.id, recoveryHash).used_at, 'password confirmation consumes a valid recovery code');
     after = (await call('/__test/proof')).data;
     assert.equal(after.sessionId, before.sessionId); assert.equal(after.userId, person.id);
     assert.ok((await route('/passkeys/register/options', 'POST', {})).data.data.challenge);
@@ -566,49 +573,66 @@ test('removing a passkey ends other sessions while preserving the current sessio
 });
 
 
-test('enabling TOTP retains passkeys and challenges both password and passkey sign-in', async () => {
+test('TOTP activation retires old passkeys and lets freshly enrolled UV passkeys satisfy MFA', async () => {
   const { hashPassword } = await import('../server/utils/password.js');
   const { generateCode } = await import('../server/utils/totp.js');
-  const person = user(); const password = 'Parallel-MFA-password-123!';
+  const person = user();
+  const password = 'Parallel-MFA-password-123!';
   database.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(password), person.id);
-  const own = await enroll(person);
-  const first = await httpFixture(); const other = await httpFixture();
+  const old = await enroll(person);
+  const first = await httpFixture();
+  const other = await httpFixture();
   try {
-    await first.route('/login', 'POST', {username:person.username, password});
-    await other.route('/login', 'POST', {username:person.username, password});
+    await first.route('/login', 'POST', { username: person.username, password });
+    await other.route('/login', 'POST', { username: person.username, password });
+    const pending = (await first.route('/passkeys/register/options', 'POST', {})).data.data;
     const setup = (await first.route('/2fa/setup', 'POST', {})).data.data;
-    const enabled = await first.route('/2fa/enable', 'POST', {code:generateCode(setup.secret, Date.now())});
-    assert.equal(enabled.status,200);
-    assert.equal(passkeys.list(database,person.id).length,1);
-    assert.equal((await other.route('/me')).status,401,'enabling TOTP still ends older sessions');
-    await first.route('/logout','POST',{});
-    let response=await first.route('/login','POST',{username:person.username,password});
-    assert.equal(response.data.twoFactorRequired,true,'password authentication retains its second step');
-    assert.equal((await first.route('/me')).status,401);
-    const totp=generateCode(setup.secret,Date.now()+30_000);
-    assert.equal((await first.route('/2fa/verify','POST',{code:totp})).status,200);
+    const enabled = await first.route('/2fa/enable', 'POST', { code: generateCode(setup.secret, Date.now()) });
+    assert.equal(enabled.status, 200);
+    assert.deepEqual(passkeys.list(database, person.id), []);
+    assert.equal((await other.route('/me')).status, 401, 'activation ends other sessions');
+    assert.equal((await first.route('/passkeys/register/verify', 'POST', {
+      credential: registration(pending, authenticator()), name: 'Earlier registration',
+    })).status, 400, 'activation invalidates even the current session’s pending registration');
+
+    let options = (await first.route('/passkeys/register/options', 'POST', {})).data.data;
+    assert.notEqual(options.user.id, old.handle);
+    const replacement = authenticator();
+    const handle = options.user.id;
+    assert.equal((await first.route('/passkeys/register/verify', 'POST', {
+      credential: registration(options, replacement), name: 'Replacement passkey',
+    })).status, 200);
+
+    await first.route('/logout', 'POST', {});
+    let response = await first.route('/login', 'POST', { username: person.username, password });
+    assert.equal(response.data.twoFactorRequired, true, 'password authentication retains its second step');
+    assert.equal((await first.route('/me')).status, 401);
+    assert.equal((await first.route('/2fa/verify', 'POST', { code: enabled.data.data.recovery_codes[0] })).status, 200);
+
+    await first.route('/logout', 'POST', {});
+    options = (await first.route('/passkeys/login/options', 'POST', {})).data.data;
+    response = await first.route('/passkeys/login/verify', 'POST', { credential: assertion(options, old.device, old.handle) });
+    assert.equal(response.status, 400, 'the old credential is revoked');
+    options = (await first.route('/passkeys/login/options', 'POST', {})).data.data;
+    response = await first.route('/passkeys/login/verify', 'POST', {
+      credential: assertion(options, replacement, handle, { flags: 1 }),
+    });
+    assert.equal(response.status, 400, 'the replacement needs verified UV');
+    assert.equal((await first.route('/me')).status, 401);
+
+    options = (await first.route('/passkeys/login/options', 'POST', {})).data.data;
+    response = await first.route('/passkeys/login/verify', 'POST', { credential: assertion(options, replacement, handle) });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.user.id, person.id);
+    assert.equal(response.data.twoFactorRequired, undefined);
+    assert.equal((await first.route('/me')).data.user.id, person.id);
     assert.ok((await first.call('/__test/proof')).data.mfaVerifiedAt);
-    await first.route('/logout','POST',{});
-    let options=(await first.route('/passkeys/login/options','POST',{})).data.data;
-    response=await first.route('/passkeys/login/verify','POST',{credential:assertion(options,own.device,own.handle,{flags:1})});
-    assert.equal(response.status,400,'the passkey must still prove UV');
-    assert.equal((await first.route('/me')).status,401);
-    options=(await first.route('/passkeys/login/options','POST',{})).data.data;
-    response=await first.route('/passkeys/login/verify','POST',{credential:assertion(options,own.device,own.handle)});
-    assert.equal(response.status,200);
-    assert.equal(response.data.twoFactorRequired,true);
-    assert.equal((await first.route('/me')).status,401);
-    assert.equal((await first.call('/__test/proof')).data.mfaVerifiedAt,undefined);
-    assert.equal((await first.route('/2fa/verify','POST',{code:totp})).status,401,'a used code cannot complete sign-in');
-    assert.equal((await first.route('/2fa/verify','POST',{code:enabled.data.data.recovery_codes[0]})).status,200);
-    assert.equal((await first.route('/me')).data.user.id,person.id);
-    assert.ok((await first.call('/__test/proof')).data.mfaVerifiedAt);
-  } finally {await first.close();await other.close();}
+  } finally { await first.close(); await other.close(); }
 });
 
 test('new passkeys need a fresh trusted MFA proof when TOTP became enabled after password sign-in', async () => {
   const { hashPassword }=await import('../server/utils/password.js');
-  const person=user(); const password='Enrollment-MFA-password!'; const own=await enroll(person);
+  const person=user(); const password='Enrollment-MFA-password!';
   database.prepare('UPDATE users SET password_hash=? WHERE id=?').run(await hashPassword(password),person.id);
   const {route,call,close}=await httpFixture();
   try {
@@ -618,11 +642,8 @@ test('new passkeys need a fresh trusted MFA proof when TOTP became enabled after
     assert.equal((await route('/passkeys/reauth/verify','POST',{method:'password',password})).status,400);
     const { generateCode } = await import('../server/utils/totp.js');
     const code = generateCode('JBSWY3DPEHPK3PXP', Date.now());
-    let options = (await route('/passkeys/reauth/options','POST',{})).data.data;
-    assert.equal((await route('/passkeys/reauth/verify','POST',{method:'passkey',credential:assertion(options,own.device,null)})).status,400);
     assert.equal((await route('/passkeys/register/options','POST',{})).data.reason,'passkey_reauth_required');
-    options = (await route('/passkeys/reauth/options','POST',{})).data.data;
-    assert.equal((await route('/passkeys/reauth/verify','POST',{method:'passkey',credential:assertion(options,own.device,null,{counter:2}),code})).status,200);
+    assert.equal((await route('/passkeys/reauth/verify','POST',{method:'password',password,code})).status,200);
     const proof=(await call('/__test/proof')).data;
     assert.ok(proof.mfaVerifiedAt);
     assert.equal((await route('/passkeys/register/options','POST',{})).status,200);
@@ -848,4 +869,34 @@ test('sign-in history retains the latest 50 entries per account and cascades on 
   database.prepare('DELETE FROM users WHERE id = ?').run(owner.id);
   assert.deepEqual(listSignInChanges(database, owner.id), []);
   assert.equal(listSignInChanges(database, other.id).length, 1);
+});
+
+test('a revoked assertion cannot update a replacement passkey that reused the row ID', async () => {
+  const person = user();
+  const own = await enroll(person);
+  const oldKey = database.prepare('SELECT * FROM user_passkeys WHERE user_id = ?').get(person.id);
+  const options = await passkeys.beginAuthentication(database, own.session);
+  const pending = passkeys.finishAuthentication(database, own.session, assertion(options, own.device, own.handle));
+  passkeys.revokeAll(database, person.id);
+  database.prepare(`INSERT INTO user_passkeys (id, user_id, credential_id, public_key, counter, name)
+    VALUES (?, ?, ?, ?, ?, 'Replacement')`).run(oldKey.id, person.id, 'replacement-credential', oldKey.public_key, oldKey.counter);
+  await assert.rejects(pending, passkeys.PasskeyVerificationError);
+  assert.equal(database.prepare('SELECT counter FROM user_passkeys WHERE id = ?').get(oldKey.id).counter, oldKey.counter);
+});
+
+test('the MFA upgrade removes legacy credentials only from accounts with confirmed TOTP', async () => {
+  const { default: migration } = await import('../server/migrations/0287.ts');
+  const enabled = user();
+  const pending = user();
+  await enroll(enabled);
+  await enroll(pending);
+  await passkeys.beginRegistration(database, enabled, 'upgrade-enrollment');
+  database.prepare(`INSERT INTO user_totp (user_id, secret, confirmed_at)
+    VALUES (?, 'JBSWY3DPEHPK3PXP', '2026-01-01'), (?, 'JBSWY3DPEHPK3PXP', NULL)`).run(enabled.id, pending.id);
+  database.exec(migration.up);
+  assert.deepEqual(passkeys.list(database, enabled.id), []);
+  assert.equal(passkeys.list(database, pending.id).length, 1);
+  assert.equal(database.prepare('SELECT 1 FROM passkey_challenges WHERE user_id = ?').get(enabled.id), undefined);
+  assert.equal(database.prepare('SELECT 1 FROM user_passkey_handles WHERE user_id = ?').get(enabled.id), undefined);
+  assert.deepEqual(database.prepare('SELECT kind FROM sign_in_changes WHERE user_id = ?').all(enabled.id), [{ kind: 'passkey_removed' }]);
 });

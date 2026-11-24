@@ -33,7 +33,7 @@ export function authPaths() {
     },
     '/api/v1/auth/passkeys/reauth/verify': {
       post: passkeyOp({ summary: "Confirm identity without leaving account settings", tag: 'Auth', auth: true, stateChanging: true,
-        description: "Refreshes authenticatedAt and, after MFA, mfaVerifiedAt while preserving identity, session ID and CSRF. Accepts a password or passkey proof. Enter a TOTP or recovery code as well when two-factor authentication is enabled. Origin or credential restriction; browser_session_required, passkey_reauth_required or passkey_policy (403), passkey_unavailable (409), passkey_failed (400 or 403).",
+        description: "Refreshes authenticatedAt and, after MFA, mfaVerifiedAt while preserving identity, session ID and CSRF. Accepts a user-verified passkey or a password. Password confirmation also needs a TOTP or recovery code when the authenticator app is enabled. Origin or credential restriction; browser_session_required, passkey_reauth_required or passkey_policy (403), passkey_unavailable (409), passkey_failed (400 or 403).",
         requestBody: jsonBody('#/components/schemas/PasskeyReauthenticationRequest'),
         responses: { 200: { description: "Confirmation accepted" }, 400: { description: "Invalid proof or second factor" }, 401: { description: "Not signed in" }, 403: { description: "Origin, browser, account or policy refusal" }, 409: { description: "Passkeys unavailable" }, 429: { description: "Too many attempts" }, 500: { description: "Unexpected authentication failure" } },
       }),
@@ -68,13 +68,10 @@ export function authPaths() {
     },
     '/api/v1/auth/passkeys/login/verify': {
       post: passkeyOp({ summary: "Verify passkey sign-in", tag: 'Auth', auth: false, stateChanging: false,
-        description: "Requires the configured BASE_URL Origin and single-use session-bound credential proof. Returns TwoFactorChallengeResponse when two-factor authentication is enabled. Otherwise returns LoginResponse. passkey_failed (400 or 403), passkey_unavailable (409), passkey_policy and account_cannot_sign_in (403).",
+        description: "Requires the configured BASE_URL Origin and single-use session-bound credential proof. A user-verified passkey satisfies the second factor and returns LoginResponse. passkey_failed (400 or 403), passkey_unavailable (409), passkey_policy and account_cannot_sign_in (403).",
         requestBody: jsonBody('#/components/schemas/PasskeyLoginRequest'),
-        responses: { 200: { description: "Sign-in accepted or second factor required", content: {
-          'application/json': { schema: { oneOf: [
-            { $ref: '#/components/schemas/LoginResponse' },
-            { $ref: '#/components/schemas/TwoFactorChallengeResponse' },
-          ] } },
+        responses: { 200: { description: "Sign-in accepted", content: {
+          'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
         } }, 400: { description: "Invalid or expired credential proof" }, 403: { description: "Origin, account or policy refusal" }, 409: { description: "Passkeys unavailable" }, 429: { description: "Too many attempts" }, 500: { description: "Unexpected authentication failure" } },
       }),
     },
@@ -173,7 +170,7 @@ export function authPaths() {
         tag: 'Auth',
         stateChanging: true,
         description: 'Confirms the pending setup with a code from the authenticator app and returns the '
-          + 'recovery codes in plain text - the only time they are readable. All other sessions of this user are ended.',
+          + 'recovery codes in plain text - the only time they are readable. All other sessions are ended and previously enrolled passkeys are revoked.',
         requestBody: jsonBody('#/components/schemas/TwoFactorCodeRequest'),
         responses: {
           200: { description: 'Recovery codes' },
@@ -224,12 +221,13 @@ export function authPaths() {
         tag: 'Auth',
         admin: true,
         stateChanging: true,
-        description: 'Blocks turning two-factor authentication off and shows a notice on every account '
-          + 'page without one. Deliberately does not reject existing sessions: in a household where '
+        description: 'Requires authenticator app setup, blocks turning it off, and shows a setup notice on accounts '
+          + 'without it. Password and SSO sign-in still require the code once the app is set up. A user-verified passkey '
+          + 'can complete sign-in without a separate code. Deliberately does not reject existing sessions: in a household where '
           + 'nobody has set it up yet, that would lock everyone out, including the admin. '
           + 'A separate route rather than a field on PUT /preferences, so the admin gate is middleware '
           + 'rather than a branch inside the handler. `required` is required and a boolean: '
-          + 'true requires two-factor authentication household-wide, false lifts the requirement.',
+          + 'true requires authenticator app setup household-wide, false lifts the requirement.',
         requestBody: { ...jsonBody('#/components/schemas/TwoFactorRequirementRequest'), required: true },
         responses: {
           200: { description: 'The requirement as it now stands' },

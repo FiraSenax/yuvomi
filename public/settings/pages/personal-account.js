@@ -325,6 +325,7 @@ function renderTwoFactorSetup(card, setup) {
     </div>
     <p class="form-hint">${t('settings.twoFactorManualHint')}</p>
     <p class="settings-2fa__secret"><code>${esc(grouped)}</code></p>
+    <p class="form-hint">${esc(t('passkeys.twoFactorEnableWarning'))}</p>
     <form id="two-factor-enable-form" class="settings-form" novalidate>
       <div class="form-group form-field">
         <label class="form-label" for="two-factor-code">${t('settings.twoFactorCodeLabel')}</label>
@@ -550,8 +551,9 @@ function twoFactorErrorText(err) {
  *
  * @param {HTMLElement} container
  * @param {() => Promise<void>} reload
+ * @param {() => void} onEnabled
  */
-function bindTwoFactorEvents(container, reload) {
+function bindTwoFactorEvents(container, reload, onEnabled) {
   const card = container.querySelector('#two-factor-card');
   if (!card) return;
   const error = card.querySelector('#two-factor-error');
@@ -563,7 +565,7 @@ function bindTwoFactorEvents(container, reload) {
     try {
       const { data } = await auth.setupTwoFactor();
       renderTwoFactorSetup(card, data);
-      bindSetupForm(card, reload);
+      bindSetupForm(card, reload, onEnabled);
     } catch (err) {
       button.disabled = false;
       showError(error, twoFactorErrorText(err));
@@ -598,8 +600,9 @@ function bindTwoFactorEvents(container, reload) {
  * Das Formular des Einrichtungsschritts.
  * @param {HTMLElement} card
  * @param {() => Promise<void>} reload
+ * @param {() => void} onEnabled
  */
-function bindSetupForm(card, reload) {
+function bindSetupForm(card, reload, onEnabled) {
   const form  = card.querySelector('#two-factor-enable-form');
   const input = card.querySelector('#two-factor-code');
   const error = card.querySelector('#two-factor-error');
@@ -621,6 +624,7 @@ function bindSetupForm(card, reload) {
       // Neu gezeichnet wird erst, wenn die Wiederherstellungscodes zu sind; die
       // Geraete hat der Server schon jetzt abgemeldet.
       form.dispatchEvent(new CustomEvent('other-sessions-ended', { bubbles: true }));
+      onEnabled();
       renderRecoveryCodes(card, data.recovery_codes, () => { reload(); });
     } catch (err) {
       button.disabled = false;
@@ -1137,15 +1141,21 @@ export async function render(container, { user }) {
     bindEvents(container, currentUser, {
       avatarData: currentUser?.avatar_data ?? null,
     }, { gravatarHost });
-    bindTwoFactorEvents(container, () => render(container, { user: currentUser }));
+    const passkeyCard = container.querySelector('#passkeys-card');
+    const history = container.querySelector('#sign-in-changes');
+    const refreshHistory = () => renderSignInChanges(history);
+    bindTwoFactorEvents(container, () => render(container, { user: currentUser }), () => {
+      passkeyCard.replaceChildren();
+      void renderPasskeyCard(passkeyCard, refreshHistory);
+      void refreshHistory();
+    });
     bindSignedInDevices(container);
     container.querySelector('#account-retry')?.addEventListener('click', () => {
       render(container, { user: currentUser });
     });
-    const history = container.querySelector('#sign-in-changes');
     await Promise.all([
-      renderPasskeyCard(container.querySelector('#passkeys-card'), () => renderSignInChanges(history)),
-      renderSignInChanges(history),
+      renderPasskeyCard(passkeyCard, refreshHistory),
+      refreshHistory(),
     ]);
     window.lucide?.createIcons({ el: container });
   } catch (error) {

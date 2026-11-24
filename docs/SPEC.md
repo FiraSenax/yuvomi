@@ -175,7 +175,7 @@ wants a nicer one. Long gaps are capped at twelve lines with the remainder count
 - `user_passkey_handles`: `user_id` INTEGER primary key/FK to users (cascade delete), unique `user_handle` TEXT (32 random bytes, base64url). Recovery deletes this row so replacement registration rotates the handle. Registration checks the same handle after asynchronous verification, blocking in-flight enrollment after recovery.
 - `passkey_challenges`: `challenge` TEXT primary key, `session_hash` and `client_hash` TEXT (SHA-256), `operation` TEXT (`register` or `authenticate`), nullable `user_id` INTEGER FK to users (cascade delete), `expires_at` INTEGER milliseconds. Unique `(session_hash, operation)`. DELETE RETURNING consumes challenges before verification. Anonymous entries are capped at 20 per hashed client IP with oldest-first eviction restricted to that client's anonymous entries; authenticated ceremonies are never evicted by anonymous traffic. A partial index supports client/expiry lookup. No global hard cap can lock out other members.
 
-A ceremony expires after five minutes. Anonymous options count all responses against a dedicated per-IP limit (the configured login allowance, capped at 20/minute); a new unauthenticated session has the same five-minute lifetime. An existing signed-in session retains its normal lifetime. Successful sign-in regenerates a normal session. Required, server-verified UV is always checked. With two-factor authentication enabled, passkey sign-in and inline confirmation also require a TOTP or recovery code. The server records `authenticatedAt` and `mfaVerifiedAt` proof times, and enrollment requires a current persisted session with recent MFA when TOTP is enabled. Removing a passkey ends other sessions/native device credentials and returns `data.ended`, retaining other keys and the current session. Password recovery/change, admin password set and admin emergency sign-out remove all passkeys, opaque handles and user-bound pending challenges. Enabling TOTP and ordinary logout-others retain passkeys while ending other sessions. Once TOTP is enabled, an existing passkey alone cannot sign in or confirm changes. Failed passkey sign-in and confirmation log IP and a stable reason without proof payloads; internal failures log separately and return 500. Recovery paths remain password or linked OIDC; this version does not create passkey-only accounts.
+A ceremony expires after five minutes. Anonymous options count all responses against a dedicated per-IP limit (the configured login allowance, capped at 20/minute); a new unauthenticated session has the same five-minute lifetime. An existing signed-in session retains its normal lifetime. Successful sign-in regenerates a normal session. Required, server-verified UV satisfies MFA for passkey sign-in and inline confirmation. Password and OIDC sign-in still require a TOTP or recovery code when TOTP is enabled, as does password confirmation. The server records `authenticatedAt` and `mfaVerifiedAt` proof times, and enrollment requires a current persisted session with recent MFA when TOTP is enabled. Removing a passkey ends other sessions/native device credentials and returns `data.ended`, retaining other keys and the current session. Password recovery/change, admin password set and admin emergency sign-out remove all passkeys, opaque handles and user-bound pending challenges. Enabling TOTP revokes all earlier passkeys, opaque handles and user-bound pending challenges before allowing fresh enrollment. Migration 287 revokes legacy passkeys on accounts with confirmed TOTP and records their removal in the private history. Ordinary logout-others retains passkeys while ending other sessions. Failed passkey sign-in and confirmation log IP and a stable reason without proof payloads; internal failures log separately and return 500. Recovery paths remain password or linked OIDC; this version does not create passkey-only accounts.
 
 ### Sign-in change history (migration 286, #2577)
 
@@ -217,20 +217,14 @@ different key from `userId`, so `requireAuth` is blind to it — and expires aft
 factor itself helps, and OIDC accounts have no password to prove anything with. Whoever lost their
 device uses a recovery code.
 
-**SSO is not a way around it.** `/auth/oidc/callback` runs the same check before creating a
-session. One could argue the provider already authenticated, possibly with its own second factor —
-but a promise that depends on how you signed in is not a promise, and more importantly the
-household-wide requirement would otherwise be a request to whoever takes the password route rather
-than a rule. A guard in `test-two-factor.js` asserts the rule rather than the one call site: every
-`setupAuthSession` that establishes a fresh sign-in sits behind an `isEnabled` check, except where
-no second factor can exist by construction (first-run setup, invite redemption, the verify route
-itself).
+**SSO and passkeys.** `/auth/oidc/callback` runs the configured TOTP check before creating a
+session. Passkey sign-in verifies WebAuthn UV as the second factor. The guard in
+`test-two-factor.js` checks each route that calls `setupAuthSession` for the applicable proof.
 
 **Household-wide requirement** (`sync_config.require_two_factor`, set through `PUT /auth/2fa/require`
 with `requireAdmin` as middleware rather than a field on `PUT /preferences`) blocks *turning off*
-and puts a notice on every account page without one. It deliberately does not reject existing
-sessions: in a household with no devices set up yet, that would lock everyone out, including the
-admin.
+and puts a setup notice on account pages without an authenticator app. The setting
+keeps sessions usable during enrollment. Passkey sign-in satisfies MFA with verified UV.
 
 ### Invites (v1.75.0)
 
