@@ -76,6 +76,7 @@ import {
   LATEST_MAX,
 } from './services/auth-fields.js';
 import * as passkeys from './services/passkeys.js';
+import { listSignInChanges, recordSignInChange, sendSignInChangePush } from './services/sign-in-changes.js';
 
 const log = createLogger('Auth');
 const router = express.Router();
@@ -1869,6 +1870,7 @@ const SIGN_IN_SESSION_REFUSALS = {
   pairing: { error: 'A pairing code can only be created from a sign-in.', code: 403, reason: 'session_required' },
 };
 const BROWSER_SESSION_REFUSALS = {
+  signInChanges: { error: 'Only a signed-in browser session can read sign-in changes.', code: 403, reason: 'browser_session_required' },
   logoutOthers: { error: 'Only a signed-in browser session can sign out other sessions.', code: 403, reason: 'browser_session_required' },
   signOutMember: { error: 'Only a signed-in browser session can sign out a member.', code: 403, reason: 'browser_session_required' },
 };
@@ -2046,25 +2048,37 @@ router.post('/passkeys/register/options', requireAuth, csrfMiddleware, recentPas
     res.json({ data: await passkeys.beginRegistration(db.get(), user, req.sessionID) });
   } catch (error) { passkeyAuthFailure(req, res, error, 'registration'); }
 });
+router.get('/me/sign-in-changes', requireAuth, requireBrowserSession('signInChanges'), validateRequest(), (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ data: listSignInChanges(db.get(), req.authUserId) });
+});
 router.post('/passkeys/register/verify', requireAuth, csrfMiddleware, recentPasskeySession, passkeyOrigin, validateRequest(), async (/** @type {PasskeyRequest} */ req, /** @type {PasskeyResponse} */ res) => {
   try {
     const user = db.get().prepare('SELECT * FROM users WHERE id = ?').get(req.authUserId);
     if (!user || !canSignIn(db.get(), user.id) || !nativePasskeysAllowed(user)) return res.status(403).json({ error: 'Native sign-in is not allowed for this account.', code: 403, reason: 'passkey_policy' });
-    await passkeys.finishRegistration(db.get(), user.id, req.sessionID, req.body?.credential, req.body?.name,
+    const database = db.get();
+    await passkeys.finishRegistration(database, user.id, req.sessionID, req.body.credential, req.body.name,
       () => {
-        const current = db.get().prepare('SELECT * FROM users WHERE id = ?').get(user.id);
-        return !!current && canSignIn(db.get(), current.id) && nativePasskeysAllowed(current)
+        const current = database.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+        return !!current && canSignIn(database, current.id) && nativePasskeysAllowed(current)
           && currentPasskeySession(req, current.id) && !!recentPasskeyProof(req);
-      });
+      },
+      () => recordSignInChange(database, user.id, 'passkey_added', req.get('User-Agent')));
     res.json({ data: { ok: true } });
+    sendSignInChangePush(database, user.id, 'passkey_added', req.get('X-Push-Subscription-Fingerprint'));
   } catch (error) { passkeyAuthFailure(req, res, error, 'registration'); }
 });
 router.delete('/passkeys/:id', requireAuth, csrfMiddleware, validateRequest(), recentPasskeySession, passkeyOrigin, (/** @type {PasskeyRequest} */ req, /** @type {PasskeyResponse} */ res, /** @type {(error:unknown)=>void} */ next) => {
   try {
+    const database = db.get();
     const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0 || !passkeys.remove(db.get(), req.authUserId, id)) return res.status(404).json({ error: 'Passkey not found.', code: 404 });
-    const ended = invalidateUserSessions(req.authUserId, req.sessionID);
+    const ended = withTx(database, () => {
+      if (!Number.isSafeInteger(id) || id <= 0 || !passkeys.remove(database, req.authUserId, id)) return null;
+      recordSignInChange(database, req.authUserId, 'passkey_removed', req.get('User-Agent'));
+      return invalidateUserSessions(req.authUserId, req.sessionID);
+    });
+    if (ended === null) return res.status(404).json({ error: 'Passkey not found.', code: 404 });
     res.json({ data: { ok: true, ended } });
+    sendSignInChangePush(database, req.authUserId, 'passkey_removed', req.get('X-Push-Subscription-Fingerprint'));
   } catch (error) { next(error); }
 });
 router.post('/passkeys/login/options', passkeyOptionsLimiter, passkeyOrigin, validateRequest(), async (/** @type {PasskeyRequest} */ req, /** @type {PasskeyResponse} */ res) => {
@@ -2200,6 +2214,7 @@ export function buildResetRoutes(targetRouter, {
   baseUrl = process.env.BASE_URL || '',
   limiter = passwordResetLimiter,
   defer = (fn) => setImmediate(fn),
+  sendSignInChange = sendSignInChangePush,
 } = {}) {
   const getDb = () => (database || db.get());
 
@@ -2411,6 +2426,7 @@ export function buildResetRoutes(targetRouter, {
       if (!accountAcceptsReset(userId)) return false;
       passkeys.revokeAll(database, userId);
       database.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, userId);
+      recordSignInChange(database, userId, 'password_changed', req.get('User-Agent'));
       return true;
     });
     if (!written) {
@@ -2420,6 +2436,7 @@ export function buildResetRoutes(targetRouter, {
     try { invalidateUserSessions(userId, null, database); }
     catch { /* sessions table may not exist in tests */ }
     res.json({ data: { ok: true } });
+    sendSignInChange(database, userId, 'password_changed', req.get('X-Push-Subscription-Fingerprint'));
   });
 }
 
@@ -3398,15 +3415,19 @@ router.post('/2fa/enable', requireAuth, csrfMiddleware, twoFactorLimiter, valida
     const code = String(req.body?.code || '');
     if (code.length > CODE_MAX) return res.status(400).json({ error: 'Input is too long.', code: 400 });
 
-    const { recovery_codes: codes } = twoFactor.confirmSetup(db.get(), req.authUserId, code);
-
-    // Alle anderen Sitzungen dieses Kontos beenden: wer den zweiten Faktor
-    // einschaltet, will nicht, dass eine alte Anmeldung ohne ihn weiterläuft.
-    invalidateUserSessions(req.authUserId, req.sessionID);
+    const database = db.get();
+    const { recovery_codes: codes } = withTx(database, () => {
+      const setup = twoFactor.confirmSetup(database, req.authUserId, code);
+      // Starting two-factor authentication ends sessions on other devices.
+      invalidateUserSessions(req.authUserId, req.sessionID);
+      recordSignInChange(database, req.authUserId, 'two_factor_enabled', req.get('User-Agent'));
+      return setup;
+    });
     req.session.authenticatedAt = Date.now();
     req.session.mfaVerifiedAt = req.session.authenticatedAt;
 
     res.json({ data: { recovery_codes: codes } });
+    sendSignInChangePush(database, req.authUserId, 'two_factor_enabled', req.get('X-Push-Subscription-Fingerprint'));
   } catch (err) {
     if (err.code === 'invalid_code') {
       return res.status(400).json({ error: err.message, code: 400, reason: 'invalid_code' });
@@ -3440,14 +3461,20 @@ router.post('/2fa/disable', requireAuth, csrfMiddleware, twoFactorLimiter, valid
   const code = String(req.body?.code || '');
   if (code.length > CODE_MAX) return res.status(400).json({ error: 'Input is too long.', code: 400 });
 
-  const result = twoFactor.verifySecondFactor(db.get(), req.authUserId, code);
-  if (!result.valid) {
+  const database = db.get();
+  const disabled = withTx(database, () => {
+    if (!twoFactor.verifySecondFactor(database, req.authUserId, code).valid) return false;
+    twoFactor.disable(database, req.authUserId);
+    recordSignInChange(database, req.authUserId, 'two_factor_disabled', req.get('User-Agent'));
+    return true;
+  });
+  if (!disabled) {
     log.warn('2FA disable rejected', { ip: req.ip, userId: req.authUserId });
     return res.status(400).json({ error: 'Invalid code.', code: 400, reason: 'invalid_code' });
   }
 
-  twoFactor.disable(db.get(), req.authUserId);
-  res.json({ data: twoFactor.getStatus(db.get(), req.authUserId) });
+  res.json({ data: twoFactor.getStatus(database, req.authUserId) });
+  sendSignInChangePush(database, req.authUserId, 'two_factor_disabled', req.get('X-Push-Subscription-Fingerprint'));
 });
 
 /**
@@ -4317,6 +4344,7 @@ router.patch('/users/:id', requireAuth, requireAdmin, csrfMiddleware, validateRe
     const newPasswordHash = (ssoOnly === true && !alreadySsoOnly)
       ? OIDC_PASSWORD_SENTINEL
       : hashedNewPassword;
+    const passwordChanged = !!newPasswordHash && !isSsoOnlyAccount(newPasswordHash);
 
     // The last-admin checks run inside the same transaction as the write
     // (#2612). A better-sqlite3 transaction is synchronous and cannot hold an
@@ -4340,7 +4368,9 @@ router.patch('/users/:id', requireAuth, requireAdmin, csrfMiddleware, validateRe
 
       if (newPasswordHash) {
         db.get().prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newPasswordHash, userId);
+        invalidateUserSessions(userId, req.sessionID, db.get(), true);
       }
+      if (passwordChanged) recordSignInChange(db.get(), userId, 'password_changed', req.get('User-Agent'));
 
       syncFamilyMemberArtifacts(db.get(), userId, {
         displayName,
@@ -4361,10 +4391,6 @@ router.patch('/users/:id', requireAuth, requireAdmin, csrfMiddleware, validateRe
     });
     if (refusal) return res.status(400).json(refusal);
 
-    if (newPasswordHash) {
-      invalidateUserSessions(userId, req.sessionID, db.get(), true);
-    }
-
     if (nextRole !== existing.role) {
       updateUserRoleSessions(userId, nextRole);
       if (userId === req.authUserId && req.session) req.session.role = nextRole;
@@ -4372,6 +4398,10 @@ router.patch('/users/:id', requireAuth, requireAdmin, csrfMiddleware, validateRe
 
     const updated = adminUserRow(userId);
     res.json({ user: publicUser(updated) });
+    if (passwordChanged) {
+      const fingerprint = userId === req.authUserId ? req.get('X-Push-Subscription-Fingerprint') : undefined;
+      sendSignInChangePush(db.get(), userId, 'password_changed', fingerprint);
+    }
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE constraint')) {
       return res.status(409).json({ error: 'Username is already taken.', code: 409, reason: 'members_username_taken' });
@@ -4651,11 +4681,13 @@ router.patch('/me/password', requireAuth, csrfMiddleware, validateRequest(), asy
       .run(hash, req.authUserId, user.password_hash);
     if (changes === 0) return false;
     invalidateUserSessions(req.authUserId, req.sessionID, database, true);
+    recordSignInChange(database, req.authUserId, 'password_changed', req.get('User-Agent'));
     return true;
   });
   if (!written) return wrongPassword();
 
   res.json({ ok: true });
+  sendSignInChangePush(database, req.authUserId, 'password_changed', req.get('X-Push-Subscription-Fingerprint'));
 });
 
 /**

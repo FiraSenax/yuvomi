@@ -7317,5 +7317,16 @@
         "confirmWithPasskey": "Potwierdź kluczem dostępu",
         "passwordChangeWarning": "Zmiana hasła usuwa wszystkie Twoje klucze dostępu. Dodaj je ponownie po zmianie.",
         "removed": "Klucz dostępu usunięty."
+    },
+    "signInChanges": {
+        "title": "Zmiany metod logowania",
+        "empty": "Brak ostatnich zmian w Twoich metodach logowania.",
+        "unavailable": "Nie udało się wczytać zmian metod logowania.",
+        "unknownDevice": "Nieznane urządzenie",
+        "two_factor_enabled": "Włączono uwierzytelnianie dwuskładnikowe.",
+        "two_factor_disabled": "Wyłączono uwierzytelnianie dwuskładnikowe.",
+        "passkey_added": "Dodano klucz dostępu.",
+        "passkey_removed": "Klucz dostępu usunięty.",
+        "password_changed": "Hasło zostało pomyślnie zmienione."
     }
 }

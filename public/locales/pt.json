@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Confirmar com uma chave de acesso",
         "passwordChangeWarning": "Alterar a tua palavra-passe remove todas as tuas chaves de acesso. Adiciona-as novamente depois.",
         "removed": "Chave de acesso removida."
+    },
+    "signInChanges": {
+        "title": "Alterações no início de sessão",
+        "empty": "Não há alterações recentes nos teus métodos de início de sessão.",
+        "unavailable": "Não foi possível carregar as alterações no início de sessão.",
+        "unknownDevice": "Dispositivo desconhecido",
+        "two_factor_enabled": "Autenticação de dois fatores ativada.",
+        "two_factor_disabled": "Autenticação de dois fatores desativada.",
+        "passkey_added": "Chave de acesso adicionada.",
+        "passkey_removed": "Chave de acesso removida.",
+        "password_changed": "Senha alterada com sucesso."
     }
 }

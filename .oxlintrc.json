@@ -1475,7 +1475,8 @@
     {
       "files": [
         "server/services/medication-scheduler.js",
-        "server/services/notifications.js"
+        "server/services/notifications.js",
+        "server/services/sign-in-changes.js"
       ],
       "rules": {
         "eslint-js/no-restricted-syntax": [

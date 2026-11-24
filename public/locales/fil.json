@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Kumpirmahin gamit ang passkey",
         "passwordChangeWarning": "Aalisin ng pagpapalit ng password ang lahat ng iyong passkey. Idagdag silang muli pagkatapos.",
         "removed": "Naalis na ang passkey."
+    },
+    "signInChanges": {
+        "title": "Mga pagbabago sa pag-sign in",
+        "empty": "Walang kamakailang pagbabago sa iyong mga paraan ng pag-sign in.",
+        "unavailable": "Hindi ma-load ang mga pagbabago sa pag-sign in.",
+        "unknownDevice": "Hindi kilalang device",
+        "two_factor_enabled": "Na-enable ang two-factor authentication.",
+        "two_factor_disabled": "Na-disable ang two-factor authentication.",
+        "passkey_added": "Naidagdag ang passkey.",
+        "passkey_removed": "Naalis na ang passkey.",
+        "password_changed": "Matagumpay na napalitan ang password."
     }
 }

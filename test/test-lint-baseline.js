@@ -747,6 +747,7 @@ test('the push senders are read from push-service-importers', () => {
   assert.deepEqual([...PUSH_SENDERS].sort(), [
     'server/routes/push.js', 'server/routes/tasks.js',
     'server/services/medication-scheduler.js', 'server/services/notifications.js',
+    'server/services/sign-in-changes.js',
   ]);
 });
 

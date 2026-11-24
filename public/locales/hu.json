@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Megerősítés hozzáférési kulccsal",
         "passwordChangeWarning": "A jelszó módosítása eltávolítja az összes hozzáférési kulcsodat. Utána add hozzá őket újra.",
         "removed": "Hozzáférési kulcs eltávolítva."
+    },
+    "signInChanges": {
+        "title": "Bejelentkezési változások",
+        "empty": "A bejelentkezési módjaid nem változtak mostanában.",
+        "unavailable": "Nem sikerült betölteni a bejelentkezési változásokat.",
+        "unknownDevice": "Ismeretlen eszköz",
+        "two_factor_enabled": "A kétlépcsős hitelesítés bekapcsolva.",
+        "two_factor_disabled": "A kétlépcsős hitelesítés kikapcsolva.",
+        "passkey_added": "Jelkulcs hozzáadva.",
+        "passkey_removed": "Hozzáférési kulcs eltávolítva.",
+        "password_changed": "Jelszó sikeresen megváltoztatva."
     }
 }

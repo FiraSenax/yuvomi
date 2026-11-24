@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Mit Passkey bestätigen",
         "passwordChangeWarning": "Wenn du dein Passwort änderst, werden alle deine Passkeys entfernt. Richte sie danach erneut ein.",
         "removed": "Passkey entfernt."
+    },
+    "signInChanges": {
+        "title": "Änderungen an der Anmeldung",
+        "empty": "Es gab zuletzt keine Änderungen an deinen Anmeldemethoden.",
+        "unavailable": "Die Änderungen konnten nicht geladen werden.",
+        "unknownDevice": "Unbekanntes Gerät",
+        "two_factor_enabled": "Zwei-Faktor-Authentifizierung aktiviert.",
+        "two_factor_disabled": "Zwei-Faktor-Authentifizierung deaktiviert.",
+        "passkey_added": "Passkey hinzugefügt.",
+        "passkey_removed": "Passkey entfernt.",
+        "password_changed": "Passwort erfolgreich geändert."
     }
 }

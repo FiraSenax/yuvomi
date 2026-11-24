@@ -193,6 +193,7 @@ function withEnv(vars, fn) {
   }
 }
 
+const { createHash } = await import('node:crypto');
 const { createPushService } = await import('../server/services/push.js');
 
 test('generates and persists VAPID keys on first use', () => {
@@ -1004,4 +1005,22 @@ test('die Standardfrist des Versands ist endlich und knapp', async () => {
   const { PUSH_SEND_TIMEOUT_MS } = await import('../server/services/push.js');
   assert.equal(typeof PUSH_SEND_TIMEOUT_MS, 'number');
   assert.ok(PUSH_SEND_TIMEOUT_MS > 0 && PUSH_SEND_TIMEOUT_MS <= 30_000);
+});
+
+test('a private push skips the originating subscription and subscriptions moved to another account', async () => {
+  const db = makeDb();
+  const webpush = makeWebpushMock();
+  db.prepare(`INSERT INTO push_subscriptions (user_id,endpoint,p256dh,auth) VALUES
+    (1,'https://push/sender','p','a'),(1,'https://push/other','p','a'),
+    (1,'https://push/reassigned','p','a'),(2,'https://push/another-user','p','a')`).run();
+  const send = webpush.sendNotification;
+  webpush.sendNotification = async (...args) => {
+    const result = await send(...args);
+    db.prepare("UPDATE push_subscriptions SET user_id = 2 WHERE endpoint = 'https://push/reassigned'").run();
+    return result;
+  };
+  const origin = createHash('sha256').update('https://push/sender').digest('hex');
+  const service = createPushService({ db, webpush });
+  assert.equal(await service.sendPushToUser(1, { title: 'Account change' }, { excludeFingerprint: origin }), 1);
+  assert.deepEqual(webpush.calls.map(call => call.endpoint), ['https://push/other']);
 });

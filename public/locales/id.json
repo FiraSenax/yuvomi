@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Konfirmasi dengan kunci sandi",
         "passwordChangeWarning": "Mengubah kata sandi akan menghapus semua kunci sandi Anda. Tambahkan kembali setelahnya.",
         "removed": "Kunci sandi dihapus."
+    },
+    "signInChanges": {
+        "title": "Perubahan cara masuk",
+        "empty": "Tidak ada perubahan terbaru pada metode masuk Anda.",
+        "unavailable": "Perubahan cara masuk tidak dapat dimuat.",
+        "unknownDevice": "Perangkat tidak dikenal",
+        "two_factor_enabled": "Autentikasi dua faktor diaktifkan.",
+        "two_factor_disabled": "Autentikasi dua faktor dinonaktifkan.",
+        "passkey_added": "Kunci sandi ditambahkan.",
+        "passkey_removed": "Kunci sandi dihapus.",
+        "password_changed": "Kata sandi berhasil diubah."
     }
 }

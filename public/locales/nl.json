@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Bevestigen met een toegangssleutel",
         "passwordChangeWarning": "Als je je wachtwoord wijzigt, worden al je passkeys verwijderd. Voeg ze daarna opnieuw toe.",
         "removed": "Passkey verwijderd."
+    },
+    "signInChanges": {
+        "title": "Aanmeldwijzigingen",
+        "empty": "Geen recente wijzigingen aan je aanmeldmethoden.",
+        "unavailable": "De aanmeldwijzigingen konden niet worden geladen.",
+        "unknownDevice": "Onbekend apparaat",
+        "two_factor_enabled": "Tweefactorauthenticatie ingeschakeld.",
+        "two_factor_disabled": "Tweefactorauthenticatie uitgeschakeld.",
+        "passkey_added": "Passkey toegevoegd.",
+        "passkey_removed": "Passkey verwijderd.",
+        "password_changed": "Wachtwoord succesvol gewijzigd."
     }
 }

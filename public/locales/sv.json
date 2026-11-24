@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Bekräfta med en åtkomstnyckel",
         "passwordChangeWarning": "Om du ändrar ditt lösenord tas alla dina passkeys bort. Lägg till dem igen efteråt.",
         "removed": "Passkey borttagen."
+    },
+    "signInChanges": {
+        "title": "Inloggningsändringar",
+        "empty": "Inga ändringar av dina inloggningsmetoder på sistone.",
+        "unavailable": "Det gick inte att läsa in inloggningsändringarna.",
+        "unknownDevice": "Okänd enhet",
+        "two_factor_enabled": "Tvåfaktorsautentisering aktiverades.",
+        "two_factor_disabled": "Tvåfaktorsautentisering inaktiverades.",
+        "passkey_added": "Nyckel tillagd.",
+        "passkey_removed": "Passkey borttagen.",
+        "password_changed": "Lösenordet har ändrats."
     }
 }

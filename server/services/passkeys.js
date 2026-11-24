@@ -153,8 +153,9 @@ export async function beginRegistration(database, user, sessionId) {
  * @param {import("@simplewebauthn/server").RegistrationResponseJSON} response
  * @param {string} name
  * @param {() => boolean} [isAllowed]
+ * @param {() => void} [onRegistered]
  */
-export async function finishRegistration(database, userId, sessionId, response, name, isAllowed = () => true) {
+export async function finishRegistration(database, userId, sessionId, response, name, isAllowed = () => true, onRegistered) {
   const cfg = config();
   const userHandle = database.prepare('SELECT user_handle FROM user_passkey_handles WHERE user_id = ?').get(userId)?.user_handle;
   const challenge = consume(database, sessionId, 'register', userId);
@@ -173,6 +174,7 @@ export async function finishRegistration(database, userId, sessionId, response, 
         || list(database, userId).length >= MAX_PASSKEYS) throw fail();
     database.prepare('INSERT INTO user_passkeys (user_id, credential_id, public_key, counter, transports, name) VALUES (?, ?, ?, ?, ?, ?)')
       .run(userId, credential.id, Buffer.from(credential.publicKey), credential.counter, JSON.stringify(transports), name.trim());
+    onRegistered?.();
   });
 }
 

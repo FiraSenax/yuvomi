@@ -2426,6 +2426,23 @@ export const schemas = {
           },
           required: ['data'],
         },
+        SignInChangesResponse: {
+          type: 'object',
+          required: ['data'],
+          properties: {
+            data: {
+              type: 'array', maxItems: 50, items: {
+                type: 'object',
+                required: ['kind', 'device', 'changed_at'],
+                properties: {
+                  kind: { type: 'string', enum: ['passkey_added', 'passkey_removed', 'password_changed', 'two_factor_enabled', 'two_factor_disabled'] },
+                  device: { type: ['string', 'null'], description: 'Broad platform inferred from the request' },
+                  changed_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
+        },
         PasskeyOptionsRequest: {
           type: 'object',
           additionalProperties: false,
