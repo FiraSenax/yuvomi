@@ -78,6 +78,7 @@ export const PRIVATE_USER_COLUMNS = new Set([
   'user_passkey_handles.user_id',
   'passkey_challenges.user_id',
   'user_recovery_codes.user_id',
+  'sign_in_changes.user_id',
   'idempotency_keys.user_id',
   'notification_channels.user_id',
   'family_document_access.user_id',
