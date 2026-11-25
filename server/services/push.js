@@ -146,6 +146,14 @@ function normalizeSubject(raw) {
 /** Eine Pause laeuft nach dieser Zeit ab und heilt sich ohne Erneuerung (#1904). */
 const WALL_PAUSE_MAX_AGE_HOURS = 12;
 
+/**
+ * @param {{
+ *   db?: ReturnType<typeof dbModule.get>,
+ *   webpush?: typeof webpushDefault,
+ *   dnsLookup?: NonNullable<Parameters<typeof createGuardedLookup>[0]>['lookup'],
+ *   timeoutMs?: number,
+ * }} [options]
+ */
 export function createPushService({
   db,
   webpush = webpushDefault,
@@ -247,7 +255,12 @@ export function createPushService({
     }
   }
 
-  async function sendPushToUser(userId, payload, { excludeFingerprint = undefined } = {}) {
+  /**
+   * @param {number} userId
+   * @param {{title?: string, body?: string, url?: string, tag?: string}} payload
+   * @param {{excludeFingerprint?: string}} [options]
+   */
+  async function sendPushToUser(userId, payload, { excludeFingerprint } = {}) {
     // DER EINE ENGPASS FUER WEB PUSH: Erinnerungen, die Zuweisung einer Aufgabe
     // und die Medikamenten-Meldung enden alle hier. Ein ehemaliges Konto
     // bekommt nichts mehr (#1381) - auch nicht ueber ein Abo, das nach dem

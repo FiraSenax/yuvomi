@@ -152,6 +152,16 @@ export class BlockedAddressError extends Error {
   }
 }
 
+/**
+ * @param {{
+ *   allowPrivate?: boolean,
+ *   lookup?: (
+ *     hostname: string,
+ *     options: import('node:dns').LookupAllOptions,
+ *     callback: (error: NodeJS.ErrnoException|null, addresses: import('node:dns').LookupAddress[]) => void,
+ *   ) => void,
+ * }} [options]
+ */
 export function createGuardedLookup({ allowPrivate = false, lookup = dnsLookup } = {}) {
   return (hostname, options, callback) => {
     if (typeof options === 'function') {

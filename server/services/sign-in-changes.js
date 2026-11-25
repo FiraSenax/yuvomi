@@ -5,6 +5,7 @@ import { pushService } from './push.js';
 
 const log = createLogger('SignInChanges');
 const HISTORY_LIMIT = 50;
+/** @type {Array<[RegExp, string]>} */
 const platforms = [
   [/iPhone/i, 'iPhone'],
   [/iPad/i, 'iPad'],
@@ -36,7 +37,11 @@ export function recordSignInChange(database, userId, kind, userAgent) {
   `).run(userId, userId, HISTORY_LIMIT);
 }
 
-/** @param {Database} database @param {number} userId */
+/**
+ * @param {Database} database
+ * @param {number} userId
+ * @returns {{kind: ChangeKind, device: string|null, changed_at: string}[]}
+ */
 export function listSignInChanges(database, userId) {
   return database.prepare(`
     SELECT kind, device, changed_at FROM sign_in_changes WHERE user_id = ? ORDER BY id DESC LIMIT ?

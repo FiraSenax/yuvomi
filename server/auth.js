@@ -2048,7 +2048,7 @@ router.post('/passkeys/register/options', requireAuth, csrfMiddleware, recentPas
     res.json({ data: await passkeys.beginRegistration(db.get(), user, req.sessionID) });
   } catch (error) { passkeyAuthFailure(req, res, error, 'registration'); }
 });
-router.get('/me/sign-in-changes', requireAuth, requireBrowserSession('signInChanges'), validateRequest(), (req, res) => {
+router.get('/me/sign-in-changes', requireAuth, requireBrowserSession('signInChanges'), validateRequest(), (/** @type {PasskeyRequest} */ req, /** @type {PasskeyResponse} */ res) => {
   res.set('Cache-Control', 'no-store').json({ data: listSignInChanges(db.get(), req.authUserId) });
 });
 router.post('/passkeys/register/verify', requireAuth, csrfMiddleware, recentPasskeySession, passkeyOrigin, validateRequest(), async (/** @type {PasskeyRequest} */ req, /** @type {PasskeyResponse} */ res) => {

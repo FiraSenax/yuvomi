@@ -773,7 +773,9 @@ test('history and push reflect only committed changes for the affected account',
   const person = user();
   const bystander = user();
   database.prepare('UPDATE users SET password_hash = ? WHERE id IN (?, ?)').run(await hashPassword(password), person.id, bystander.id);
-  const push = t.mock.method(pushService, 'sendPushToUser', async (..._args) => 1);
+  /** @type {typeof pushService.sendPushToUser} */
+  const sendNotice = async () => 1;
+  const push = t.mock.method(pushService, 'sendPushToUser', sendNotice);
   const owner = await httpFixture();
   const other = await httpFixture();
   const fingerprint = 'ab'.repeat(32);
@@ -799,6 +801,7 @@ test('history and push reflect only committed changes for the affected account',
     const disabled = await owner.route('/2fa/disable', 'POST', { code: enabled.data.data.recovery_codes[0] }, headers);
     assert.equal(disabled.status, 200);
 
+    /** @type {ReturnType<typeof import('../server/services/sign-in-changes.js').listSignInChanges>} */
     const history = (await owner.route('/me/sign-in-changes')).data.data;
     assert.deepEqual(history.map(row => row.kind), ['two_factor_disabled', 'two_factor_enabled', 'passkey_removed', 'passkey_added']);
     for (const row of history) {
@@ -821,7 +824,7 @@ test('history and push reflect only committed changes for the affected account',
       assert.equal(userId, person.id);
       assert.equal(payload.url, '/settings/personal/account');
       assert.deepEqual(Object.keys(payload).sort(), ['body', 'tag', 'title', 'url']);
-      assert.equal(options.excludeFingerprint, fingerprint);
+      assert.equal(options?.excludeFingerprint, fingerprint);
       assert.doesNotMatch(JSON.stringify(payload), /Private|Android|secret/i);
     }
   } finally {

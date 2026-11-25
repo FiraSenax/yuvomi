@@ -16,6 +16,7 @@ export async function renderSignInChanges(container) {
   if (!container) return;
   let content;
   try {
+    /** @type {{data: {kind: string, device: string|null, changed_at: string}[]}} */
     const { data } = await api.get('/auth/me/sign-in-changes');
     content = data.length
       ? `<div class="row-carrier settings-group">${data.map(change => settingRowHtml({
