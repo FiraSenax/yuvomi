@@ -885,18 +885,29 @@ test('a revoked assertion cannot update a replacement passkey that reused the ro
 });
 
 test('the MFA upgrade removes legacy credentials only from accounts with confirmed TOTP', async () => {
-  const { default: migration } = await import('../server/migrations/0287.ts');
-  const enabled = user();
-  const pending = user();
-  await enroll(enabled);
-  await enroll(pending);
-  await passkeys.beginRegistration(database, enabled, 'upgrade-enrollment');
-  database.prepare(`INSERT INTO user_totp (user_id, secret, confirmed_at)
-    VALUES (?, 'JBSWY3DPEHPK3PXP', '2026-01-01'), (?, 'JBSWY3DPEHPK3PXP', NULL)`).run(enabled.id, pending.id);
-  database.exec(migration.up);
-  assert.deepEqual(passkeys.list(database, enabled.id), []);
-  assert.equal(passkeys.list(database, pending.id).length, 1);
-  assert.equal(database.prepare('SELECT 1 FROM passkey_challenges WHERE user_id = ?').get(enabled.id), undefined);
-  assert.equal(database.prepare('SELECT 1 FROM user_passkey_handles WHERE user_id = ?').get(enabled.id), undefined);
-  assert.deepEqual(database.prepare('SELECT kind FROM sign_in_changes WHERE user_id = ?').all(enabled.id), [{ kind: 'passkey_removed' }]);
+  const { openSchemaDb, migrateTo } = await import('./helpers/schema-db.js');
+  const legacy = openSchemaDb({ upTo: 286 });
+  try {
+    legacy.exec(`
+      INSERT INTO users (id, username, display_name, password_hash) VALUES
+        (1, 'totp-enabled', 'Enabled', 'fixture-hash'), (2, 'totp-pending', 'Pending', 'fixture-hash');
+      INSERT INTO user_totp (user_id, secret, confirmed_at) VALUES
+        (1, 'JBSWY3DPEHPK3PXP', '2026-01-01'), (2, 'JBSWY3DPEHPK3PXP', NULL);
+      INSERT INTO user_passkeys (user_id, credential_id, public_key, name) VALUES
+        (1, 'enabled-key', X'00', 'Enabled key'), (2, 'pending-key', X'00', 'Pending key');
+      INSERT INTO user_passkey_handles (user_id, user_handle) VALUES
+        (1, 'enabled-handle'), (2, 'pending-handle');
+      INSERT INTO passkey_challenges (challenge, session_hash, client_hash, operation, user_id, expires_at) VALUES
+        ('enabled-challenge', 'enabled-session', 'enabled-client', 'register', 1, 9999999999999),
+        ('pending-challenge', 'pending-session', 'pending-client', 'register', 2, 9999999999999);
+    `);
+    migrateTo(legacy, 287);
+    assert.deepEqual(legacy.prepare('SELECT credential_id FROM user_passkeys').all().map(row => row.credential_id), ['pending-key']);
+    assert.deepEqual(legacy.prepare('SELECT user_handle FROM user_passkey_handles').all().map(row => row.user_handle), ['pending-handle']);
+    assert.deepEqual(legacy.prepare('SELECT challenge FROM passkey_challenges').all().map(row => row.challenge), ['pending-challenge']);
+    const notices = legacy.prepare('SELECT user_id, kind FROM sign_in_changes').all();
+    assert.deepEqual(notices.map(({ user_id, kind }) => [user_id, kind]), [[1, 'passkey_removed']]);
+  } finally {
+    legacy.close();
+  }
 });
