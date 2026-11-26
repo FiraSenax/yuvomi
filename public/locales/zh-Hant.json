@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "使用通行金鑰確認",
         "passwordChangeWarning": "變更密碼會移除你的所有通行金鑰。請在變更後重新新增。",
         "removed": "通行金鑰已移除。"
+    },
+    "signInChanges": {
+        "title": "登入方式異動",
+        "empty": "近期沒有登入方式異動。",
+        "unavailable": "無法載入登入方式異動。",
+        "unknownDevice": "未知裝置",
+        "two_factor_enabled": "已啟用雙重驗證。",
+        "two_factor_disabled": "已停用雙重驗證。",
+        "passkey_added": "已新增通行金鑰。",
+        "passkey_removed": "通行金鑰已移除。",
+        "password_changed": "密碼修改成功。"
     }
 }

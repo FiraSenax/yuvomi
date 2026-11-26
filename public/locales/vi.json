@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Xác nhận bằng khóa truy cập",
         "passwordChangeWarning": "Đổi mật khẩu sẽ xóa tất cả khóa truy cập của bạn. Hãy thêm lại chúng sau đó.",
         "removed": "Đã xóa khóa truy cập."
+    },
+    "signInChanges": {
+        "title": "Thay đổi đăng nhập",
+        "empty": "Gần đây không có thay đổi nào đối với phương thức đăng nhập của bạn.",
+        "unavailable": "Không thể tải các thay đổi đăng nhập.",
+        "unknownDevice": "Thiết bị không xác định",
+        "two_factor_enabled": "Đã bật xác thực hai yếu tố.",
+        "two_factor_disabled": "Đã tắt xác thực hai yếu tố.",
+        "passkey_added": "Đã thêm khóa truy cập.",
+        "passkey_removed": "Đã xóa khóa truy cập.",
+        "password_changed": "Thay đổi mật khẩu thành công."
     }
 }

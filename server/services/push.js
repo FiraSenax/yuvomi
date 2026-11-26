@@ -3,6 +3,7 @@
  * Zweck: VAPID-Schlüssel auflösen/persistieren und Web-Push-Nachrichten senden.
  * Abhängigkeiten: web-push, server/db.js
  */
+import { createHash } from 'node:crypto';
 import https from 'node:https';
 import { isIP } from 'node:net';
 import { parse as legacyParseUrl } from 'node:url';
@@ -145,6 +146,14 @@ function normalizeSubject(raw) {
 /** Eine Pause laeuft nach dieser Zeit ab und heilt sich ohne Erneuerung (#1904). */
 const WALL_PAUSE_MAX_AGE_HOURS = 12;
 
+/**
+ * @param {{
+ *   db?: ReturnType<typeof dbModule.get>,
+ *   webpush?: typeof webpushDefault,
+ *   dnsLookup?: NonNullable<Parameters<typeof createGuardedLookup>[0]>['lookup'],
+ *   timeoutMs?: number,
+ * }} [options]
+ */
 export function createPushService({
   db,
   webpush = webpushDefault,
@@ -246,37 +255,53 @@ export function createPushService({
     }
   }
 
-  async function sendPushToUser(userId, payload) {
+  /**
+   * @param {number} userId
+   * @param {{title?: string, body?: string, url?: string, tag?: string}} payload
+   * @param {{excludeFingerprint?: string}} [options]
+   */
+  async function sendPushToUser(userId, payload, { excludeFingerprint } = {}) {
     // DER EINE ENGPASS FUER WEB PUSH: Erinnerungen, die Zuweisung einer Aufgabe
     // und die Medikamenten-Meldung enden alle hier. Ein ehemaliges Konto
     // bekommt nichts mehr (#1381) - auch nicht ueber ein Abo, das nach dem
     // Deaktivieren noch dasteht. Synchron vor dem ersten `await`.
     if (!isActiveAccount(userId, { db: getDb() })) return 0;
+    const database = getDb();
+    const subscriptionScope = `user_id = ? AND
+      (wall_paused_at IS NULL OR wall_paused_at < datetime('now', '-${WALL_PAUSE_MAX_AGE_HOURS} hours'))`;
+    const ids = database.prepare(`SELECT id FROM push_subscriptions WHERE ${subscriptionScope}`).all(userId);
+    if (!ids.length) return 0;
     const { subject } = ensureVapid();
-    const subs = getDb().prepare(
-      `SELECT * FROM push_subscriptions WHERE user_id = ? AND (wall_paused_at IS NULL OR wall_paused_at < datetime('now', '-${WALL_PAUSE_MAX_AGE_HOURS} hours'))`,
-    ).all(userId);
+    const findSubscription = database.prepare(`SELECT * FROM push_subscriptions WHERE ${subscriptionScope} AND id = ?`);
+    const sameSubscription = 'id = ? AND user_id = ? AND endpoint = ? AND p256dh = ? AND auth = ?';
+    const remove = database.prepare(`DELETE FROM push_subscriptions WHERE ${sameSubscription}`);
+    const markUsed = database.prepare(`UPDATE push_subscriptions SET last_used_at = ? WHERE ${sameSubscription}`);
     let sent = 0;
-    for (const sub of subs) {
+    for (const { id } of ids) {
+      // Earlier sends can yield while this browser is unsubscribed or re-assigned.
+      if (!isActiveAccount(userId, { db: database })) break;
+      const sub = findSubscription.get(userId, id);
+      if (!sub) continue;
+      if (excludeFingerprint && createHash('sha256').update(sub.endpoint).digest('hex') === excludeFingerprint) continue;
+      const identity = [id, userId, sub.endpoint, sub.p256dh, sub.auth];
       // Auch Bestandszeilen von vor der Pruefung beim Speichern: ein Endpoint
       // ins eigene Netz wird nie angefasst und wie ein erloschenes Abo (404/410)
       // entfernt - zustellbar wird er nie. Geloggt nur der Host - der volle
       // Endpoint traegt ein Geraete-Token.
       const target = checkPushEndpoint(sub.endpoint);
       if (!target.ok) {
-        getDb().prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
+        remove.run(...identity);
         log.warn(`Removed push subscription ${sub.id} with a non-public endpoint (host=${pushHost(sub.endpoint)}, reason=${target.reason})`);
         continue;
       }
       const subscription = { endpoint: target.href, keys: { p256dh: sub.p256dh, auth: sub.auth } };
       try {
         await sendGuarded(subscription, JSON.stringify(payload));
-        getDb().prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE id = ?')
-          .run(new Date().toISOString(), sub.id);
+        markUsed.run(new Date().toISOString(), ...identity);
         sent += 1;
       } catch (err) {
         if (err && (err.statusCode === 404 || err.statusCode === 410)) {
-          getDb().prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
+          remove.run(...identity);
           log.info(`Removed gone push subscription ${sub.id} (${pushHost(sub.endpoint)})`);
         } else {
           // Statuscode und Body des Push-Dienstes mitloggen - ohne sie ist ein

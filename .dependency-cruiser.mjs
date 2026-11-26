@@ -141,6 +141,8 @@ export default {
     //   Held by test:tasks-routes.
     // - server/routes/push.js: the test push goes to the requester themself, with the
     //   text they sent. Held by test:push.
+    // - server/services/sign-in-changes.js: private notices go to the account
+    //   affected by the committed credential change. Held by test:passkeys and test:push.
     // A provider or the push service handed to another file as a parameter imports
     // nothing these rules could see; the lint selectors CHANNEL-SEND and PUSH-SEND
     // (.oxlintrc.json, server/ only) catch the call there. Neither rule sees a
@@ -162,6 +164,7 @@ export default {
           '^server/services/medication-scheduler\\.[jt]s$',
           '^server/services/notifications\\.[jt]s$',
           '^server/services/push\\.[jt]s$',
+          '^server/services/sign-in-changes\\.[jt]s$',
         ],
       },
       to: { path: '^server/services/push\\.[jt]s$' },

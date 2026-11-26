@@ -102,8 +102,11 @@ async function withRecentAuthentication(action) {
   }
 }
 
-/** @param {HTMLElement} container */
-export async function renderPasskeyCard(container) {
+/**
+ * @param {HTMLElement} container
+ * @param {() => void} [onChange]
+ */
+export async function renderPasskeyCard(container, onChange) {
   /** @type {PasskeyState|undefined} */
   let state;
   try { state = (await api.get('/auth/passkeys'))?.data; } catch { return; }
@@ -149,7 +152,8 @@ export async function renderPasskeyCard(container) {
       const { data: options } = await withRecentAuthentication(() => api.post('/auth/passkeys/register/options', {}));
       const credential = await createPasskey(options);
       await withRecentAuthentication(() => api.post('/auth/passkeys/register/verify', { credential, name }));
-      await renderPasskeyCard(container);
+      onChange?.();
+      await renderPasskeyCard(container, onChange);
       /** @type {HTMLElement} */ (container.querySelector('#passkey-status')).textContent = t('passkeys.added');
     } catch (error) { status.textContent = passkeyErrorText(error); }
     finally { button.disabled = false; }
@@ -161,7 +165,8 @@ export async function renderPasskeyCard(container) {
       try {
         const result = await withRecentAuthentication(() => api.delete(`/auth/passkeys/${button.dataset.removePasskey}`));
         container.dispatchEvent(new CustomEvent('other-sessions-ended', { bubbles: true }));
-        await renderPasskeyCard(container);
+        onChange?.();
+        await renderPasskeyCard(container, onChange);
         /** @type {HTMLElement} */ (container.querySelector('#passkey-status')).textContent = `${t('passkeys.removed')} ${t('settings.otherSessionsEnded', { count: result?.data?.ended ?? 0 })}`;
       }
       catch (error) { status.textContent = passkeyErrorText(error); button.disabled = false; }

@@ -78,6 +78,22 @@ export function authPaths() {
         } }, 400: { description: "Invalid or expired credential proof" }, 403: { description: "Origin, account or policy refusal" }, 409: { description: "Passkeys unavailable" }, 429: { description: "Too many attempts" }, 500: { description: "Unexpected authentication failure" } },
       }),
     },
+    '/api/v1/auth/me/sign-in-changes': {
+      get: {
+        ...passkeyOp({
+          summary: 'Read your recent sign-in method changes', tag: 'Auth', auth: true, stateChanging: false,
+          description: 'The last 50 changes of the signed-in account, newest first. Requires a browser session.',
+          responses: {
+            200: { description: 'Recent changes', content: {
+              'application/json': { schema: { $ref: '#/components/schemas/SignInChangesResponse' } },
+            } },
+            401: { $ref: '#/components/responses/Unauthorized' },
+            403: { $ref: '#/components/responses/Forbidden' },
+          },
+        }),
+        security: [{ cookieAuth: [] }],
+      },
+    },
     '/api/v1/auth/login': {
       post: op({
         summary: 'Login with username and password',
@@ -978,6 +994,7 @@ const USERNAME_TAKEN = '`members_username_taken` (409, another account has this 
 const SSO_ONLY_REASONS = '`members_sso_email_required` (400, an account without a password needs an email address), '
   + '`members_sso_email_ambiguous` (400, that email address already belongs to another member)';
 const CASE_REASONS = {
+  '/api/v1/auth/me/sign-in-changes': { get: '`browser_session_required` (403, only a signed-in browser session can read sign-in changes)' },
   '/api/v1/auth/login': {
     post: '`account_cannot_sign_in` (403, the account is deactivated or may not sign in), `password_login_disabled` (403, password login is turned off for this instance)',
   },

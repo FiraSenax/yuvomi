@@ -177,6 +177,12 @@ wants a nicer one. Long gaps are capped at twelve lines with the remainder count
 
 A ceremony expires after five minutes. Anonymous options count all responses against a dedicated per-IP limit (the configured login allowance, capped at 20/minute); a new unauthenticated session has the same five-minute lifetime. An existing signed-in session retains its normal lifetime. Successful sign-in regenerates a normal session. Required, server-verified UV is always checked. With two-factor authentication enabled, passkey sign-in and inline confirmation also require a TOTP or recovery code. The server records `authenticatedAt` and `mfaVerifiedAt` proof times, and enrollment requires a current persisted session with recent MFA when TOTP is enabled. Removing a passkey ends other sessions/native device credentials and returns `data.ended`, retaining other keys and the current session. Password recovery/change, admin password set and admin emergency sign-out remove all passkeys, opaque handles and user-bound pending challenges. Enabling TOTP and ordinary logout-others retain passkeys while ending other sessions. Once TOTP is enabled, an existing passkey alone cannot sign in or confirm changes. Failed passkey sign-in and confirmation log IP and a stable reason without proof payloads; internal failures log separately and return 500. Recovery paths remain password or linked OIDC; this version does not create passkey-only accounts.
 
+### Sign-in change history (migration 286, #2577)
+
+`sign_in_changes` keeps the most recent 50 changes per account with a UTC timestamp and a broad device label inferred from the request. Password changes include self-service, recovery and administrator changes. The record is written with the credential change. Only the affected account can read the history from a browser session via `GET /api/v1/auth/me/sign-in-changes`.
+
+Best-effort Web Push goes to the affected account's other subscriptions after commit. The browser can identify its current subscription with an optional `X-Push-Subscription-Fingerprint` containing the SHA-256 hex of its endpoint. The notice contains the change type and a link to account settings. The history does not store the user agent or any credential, address, or subscription identifier.
+
 ### Two-Factor Authentication (migration v159, #672)
 
 Optional TOTP as a second factor, opt-in per user. Two tables instead of columns on `users`, because

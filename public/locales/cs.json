@@ -7157,5 +7157,16 @@
         "confirmWithPasskey": "Potvrdit přístupovým klíčem",
         "passwordChangeWarning": "Změna hesla odstraní všechny vaše přístupové klíče. Poté je přidejte znovu.",
         "removed": "Přístupový klíč odstraněn."
+    },
+    "signInChanges": {
+        "title": "Změny přihlašování",
+        "empty": "Žádné nedávné změny způsobu přihlašování.",
+        "unavailable": "Změny přihlašování se nepodařilo načíst.",
+        "unknownDevice": "Neznámé zařízení",
+        "two_factor_enabled": "Dvoufaktorové ověřování bylo zapnuto.",
+        "two_factor_disabled": "Dvoufaktorové ověřování bylo vypnuto.",
+        "passkey_added": "Přístupový klíč byl přidán.",
+        "passkey_removed": "Přístupový klíč odstraněn.",
+        "password_changed": "Heslo úspěšně změněno."
     }
 }

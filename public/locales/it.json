@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Conferma con una passkey",
         "passwordChangeWarning": "Cambiare la password rimuove tutte le tue passkey. Aggiungile di nuovo in seguito.",
         "removed": "Passkey rimossa."
+    },
+    "signInChanges": {
+        "title": "Modifiche all’accesso",
+        "empty": "Nessuna modifica recente ai tuoi metodi di accesso.",
+        "unavailable": "Impossibile caricare le modifiche all’accesso.",
+        "unknownDevice": "Dispositivo sconosciuto",
+        "two_factor_enabled": "Autenticazione a due fattori attivata.",
+        "two_factor_disabled": "Autenticazione a due fattori disattivata.",
+        "passkey_added": "Chiave di accesso aggiunta.",
+        "passkey_removed": "Passkey rimossa.",
+        "password_changed": "Password modificata con successo."
     }
 }

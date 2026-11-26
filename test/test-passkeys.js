@@ -533,6 +533,11 @@ test('the four credential-recovery paths revoke planted passkeys and pending enr
       assert.equal(passkeys.list(database, person.id).length, 0, action);
       assert.equal(database.prepare('SELECT count(*) AS n FROM passkey_challenges WHERE user_id = ?').get(person.id).n, 0);
       assert.equal(passkeys.list(database, other.id).length, 1, 'another member keeps their credential');
+      const passwordChanges = database.prepare('SELECT kind FROM sign_in_changes WHERE user_id = ?');
+      assert.deepEqual(passwordChanges.all(person.id), action === 'admin-emergency' ? [] : [{ kind: 'password_changed' }]);
+      if (actor.id !== person.id) {
+        assert.deepEqual((await route('/me/sign-in-changes')).data.data, [], 'an admin only sees their own history');
+      }
       const options = await passkeys.beginAuthentication(database, `recovered-${action}`);
       await assert.rejects(passkeys.finishAuthentication(database, `recovered-${action}`, assertion(options, own.device, own.handle)));
       if (action !== 'password-reset') assert.equal((await call('/__test/proof')).data.userId, actor.id);
@@ -758,4 +763,89 @@ test('passkey POST routes reject malformed input through their request schemas',
       assert.equal(result.data.reason, 'validation', path);
     }
   } finally { await close(); }
+});
+
+test('history and push reflect only committed changes for the affected account', async (t) => {
+  const { hashPassword } = await import('../server/utils/password.js');
+  const { pushService } = await import('../server/services/push.js');
+  const { generateCode } = await import('../server/utils/totp.js');
+  const password = 'Sign-in-changes-test-password!';
+  const person = user();
+  const bystander = user();
+  database.prepare('UPDATE users SET password_hash = ? WHERE id IN (?, ?)').run(await hashPassword(password), person.id, bystander.id);
+  /** @type {typeof pushService.sendPushToUser} */
+  const sendNotice = async () => 1;
+  const push = t.mock.method(pushService, 'sendPushToUser', sendNotice);
+  const owner = await httpFixture();
+  const other = await httpFixture();
+  const fingerprint = 'ab'.repeat(32);
+  const headers = { 'User-Agent': 'Example private marker Android', 'X-Push-Subscription-Fingerprint': fingerprint };
+  try {
+    assert.equal((await owner.route('/me/sign-in-changes')).status, 401);
+    assert.equal((await owner.route('/login', 'POST', { username: person.username, password })).status, 200);
+    const options = (await owner.route('/passkeys/register/options', 'POST', {})).data.data;
+    const invalid = registration(options, authenticator(), { flags: 0x41 });
+    assert.equal((await owner.route('/passkeys/register/verify', 'POST', { credential: invalid, name: 'Private key label' }, headers)).status, 400);
+    assert.deepEqual((await owner.route('/me/sign-in-changes')).data.data, []);
+    assert.equal(push.mock.callCount(), 0);
+
+    const retry = (await owner.route('/passkeys/register/options', 'POST', {})).data.data;
+    const credential = registration(retry, authenticator());
+    assert.equal((await owner.route('/passkeys/register/verify', 'POST', { credential, name: 'Private key label' }, headers)).status, 200);
+    const keyId = passkeys.list(database, person.id)[0].id;
+    assert.equal((await owner.route(`/passkeys/${keyId}`, 'DELETE', undefined, headers)).status, 200);
+    const setup = await owner.route('/2fa/setup', 'POST', {});
+    assert.equal(setup.status, 200);
+    const enabled = await owner.route('/2fa/enable', 'POST', { code: generateCode(setup.data.data.secret, Date.now()) }, headers);
+    assert.equal(enabled.status, 200, JSON.stringify(enabled.data));
+    const disabled = await owner.route('/2fa/disable', 'POST', { code: enabled.data.data.recovery_codes[0] }, headers);
+    assert.equal(disabled.status, 200);
+
+    /** @type {ReturnType<typeof import('../server/services/sign-in-changes.js').listSignInChanges>} */
+    const history = (await owner.route('/me/sign-in-changes')).data.data;
+    assert.deepEqual(history.map(row => row.kind), ['two_factor_disabled', 'two_factor_enabled', 'passkey_removed', 'passkey_added']);
+    for (const row of history) {
+      assert.deepEqual(Object.keys(row).sort(), ['changed_at', 'device', 'kind']);
+      assert.equal(row.device, 'Android');
+      assert.ok(Number.isFinite(Date.parse(row.changed_at)));
+    }
+    assert.equal((await other.route('/login', 'POST', { username: bystander.username, password })).status, 200);
+    assert.deepEqual((await other.route(`/me/sign-in-changes?user_id=${person.id}`)).data.data, []);
+
+    const apiToken = 'yuvomi_test_history_scope';
+    database.prepare('INSERT INTO api_tokens (name, token_hash, token_prefix, created_by) VALUES (?, ?, ?, ?)')
+      .run('History test token', digest(apiToken).toString('hex'), 'yuvomi_test', person.id);
+    const refused = await owner.route('/me/sign-in-changes', 'GET', undefined, { Authorization: `Bearer ${apiToken}` });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.reason, 'browser_session_required');
+
+    assert.equal(push.mock.callCount(), 4);
+    for (const { arguments: [userId, payload, options] } of push.mock.calls) {
+      assert.equal(userId, person.id);
+      assert.equal(payload.url, '/settings/personal/account');
+      assert.deepEqual(Object.keys(payload).sort(), ['body', 'tag', 'title', 'url']);
+      assert.equal(options?.excludeFingerprint, fingerprint);
+      assert.doesNotMatch(JSON.stringify(payload), /Private|Android|secret/i);
+    }
+  } finally {
+    await owner.close();
+    await other.close();
+  }
+});
+
+test('sign-in history retains the latest 50 entries per account and cascades on account removal', async () => {
+  const { listSignInChanges, recordSignInChange } = await import('../server/services/sign-in-changes.js');
+  const owner = user();
+  const other = user();
+  recordSignInChange(database, other.id, 'two_factor_disabled', undefined);
+  recordSignInChange(database, owner.id, 'passkey_added', 'iPhone');
+  for (let i = 0; i < 49; i++) recordSignInChange(database, owner.id, 'passkey_removed', undefined);
+  recordSignInChange(database, owner.id, 'password_changed', 'Windows');
+  const history = listSignInChanges(database, owner.id);
+  assert.equal(history.length, 50);
+  assert.equal(history[0].kind, 'password_changed');
+  assert.ok(history.slice(1).every(change => change.kind === 'passkey_removed'));
+  database.prepare('DELETE FROM users WHERE id = ?').run(owner.id);
+  assert.deepEqual(listSignInChanges(database, owner.id), []);
+  assert.equal(listSignInChanges(database, other.id).length, 1);
 });

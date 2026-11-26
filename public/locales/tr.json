@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Geçiş anahtarıyla doğrula",
         "passwordChangeWarning": "Parolanı değiştirmek tüm geçiş anahtarlarını kaldırır. Sonrasında bunları yeniden ekle.",
         "removed": "Geçiş anahtarı kaldırıldı."
+    },
+    "signInChanges": {
+        "title": "Oturum açma değişiklikleri",
+        "empty": "Oturum açma yöntemlerinizde yakın zamanda değişiklik olmadı.",
+        "unavailable": "Oturum açma değişiklikleri yüklenemedi.",
+        "unknownDevice": "Bilinmeyen cihaz",
+        "two_factor_enabled": "İki faktörlü kimlik doğrulama etkinleştirildi.",
+        "two_factor_disabled": "İki faktörlü kimlik doğrulama devre dışı bırakıldı.",
+        "passkey_added": "Geçiş anahtarı eklendi.",
+        "passkey_removed": "Geçiş anahtarı kaldırıldı.",
+        "password_changed": "Şifre başarıyla değiştirildi."
     }
 }

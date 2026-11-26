@@ -53,6 +53,7 @@
  */
 const SPLIT_GUEST_SESSION_ROUTES = [
   ['GET', '/auth/me'],
+  ['GET', '/auth/me/sign-in-changes'],
   ['POST', '/auth/logout'],
   ['POST', '/auth/changelog-seen'],
 ];

@@ -546,6 +546,9 @@ const de = flattenLocale(localeFile('de'));
  * Eintrag macht den Test rot, statt still an der Pruefung vorbeizulaufen.
  */
 const DYNAMIC_KEY_SITES = {
+  'services/sign-in-changes.js|`signInChanges.${kind}`': () => [
+    'passkey_added', 'passkey_removed', 'password_changed', 'two_factor_enabled', 'two_factor_disabled',
+  ].map((kind) => `signInChanges.${kind}`),
   // reminderPayload(): `translate(locale, origin.titleKey)` - die Titel der
   // Herkunftstabelle REMINDER_ORIGINS in derselben Datei.
   'services/notifications.js|origin.titleKey': (code) => [...code.matchAll(/\btitleKey:\s*'([^']+)'/g)].map((m) => m[1]),

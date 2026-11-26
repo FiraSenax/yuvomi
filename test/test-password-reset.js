@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { createPasswordResetService } from '../server/services/password-reset.js';
 import passkeysMigration from '../server/migrations/0285.ts';
+import signInChangesMigration from '../server/migrations/0286.ts';
 
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret';
 
@@ -27,6 +28,7 @@ function makeDb() {
     CREATE UNIQUE INDEX idx_password_resets_hash ON password_resets(token_hash);
   `);
   db.exec(passkeysMigration.up);
+  db.exec(signInChangesMigration.up);
   db.prepare("INSERT INTO users (id, username) VALUES (1,'alice')").run();
   return db;
 }
@@ -96,6 +98,7 @@ function makeAuthApp(db, { baseUrl = 'https://oikos.test', sendMail = null } = {
     const pending = [];
     buildResetRoutes(router, {
       database: db,
+      sendSignInChange: () => {},
       emailService: { isConfigured: () => true, sendMail: sendMail || (async (m) => { sent.push(m); }) },
       resetService: createPasswordResetService({ db }),
       baseUrl,

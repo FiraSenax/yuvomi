@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Confirm with a passkey",
         "passwordChangeWarning": "Changing your password removes all your passkeys. Add them again afterwards.",
         "removed": "Passkey removed."
+    },
+    "signInChanges": {
+        "title": "Sign-in changes",
+        "empty": "No recent changes to your sign-in methods.",
+        "unavailable": "Could not load sign-in changes.",
+        "unknownDevice": "Unknown device",
+        "two_factor_enabled": "Two-factor authentication enabled.",
+        "two_factor_disabled": "Two-factor authentication disabled.",
+        "passkey_added": "Passkey added.",
+        "passkey_removed": "Passkey removed.",
+        "password_changed": "Password changed successfully."
     }
 }

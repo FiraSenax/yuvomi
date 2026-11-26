@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "使用通行密钥确认",
         "passwordChangeWarning": "更改密码会移除你的所有通行密钥。请在更改后重新添加。",
         "removed": "通行密钥已移除。"
+    },
+    "signInChanges": {
+        "title": "登录方式变更",
+        "empty": "近期没有登录方式变更。",
+        "unavailable": "无法加载登录方式变更。",
+        "unknownDevice": "未知设备",
+        "two_factor_enabled": "已启用双重验证。",
+        "two_factor_disabled": "已停用双重验证。",
+        "passkey_added": "已添加通行密钥。",
+        "passkey_removed": "通行密钥已移除。",
+        "password_changed": "密码修改成功。"
     }
 }

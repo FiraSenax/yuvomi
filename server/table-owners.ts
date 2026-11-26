@@ -208,6 +208,7 @@ export const TABLE_OWNERS: Readonly<Record<string, Owner>> = Object.freeze({
   shopping_move_notices: 'shopping',
   shopping_purchases: 'shopping',
   shopping_stores: 'shopping',
+  sign_in_changes: 'auth',
   split_expense_guest_users: 'auth', // an account kind, not budget data
   subscription_categories: 'budget',
   subscription_exchange_rates: 'budget',

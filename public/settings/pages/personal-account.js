@@ -1,5 +1,6 @@
 import { api, auth } from '/api.js';
 import { renderPasskeyCard } from '/settings/passkeys.js';
+import { renderSignInChanges, signInChangesCardHtml } from '/settings/sign-in-changes.js';
 import {
   isDateInputValid,
   parseDateInput,
@@ -770,6 +771,8 @@ function renderPage(container, user, refreshFailed, accessNotice, oidcState, oid
 
       ${twoFactorCardHtml(twoFactorState)}
 
+      ${signInChangesCardHtml()}
+
       ${oidcCardHtml(oidcState, oidcNotice)}
 
       ${/* Ein Ausgaben-Gast bekommt kein Geraet (mayHaveDevice, server/auth.js). */ ''}
@@ -1021,8 +1024,9 @@ function bindEvents(container, user, profileState, { gravatarHost = '' } = {}) {
       const passkeyCard = container.querySelector('#passkeys-card');
       if (passkeyCard) {
         passkeyCard.replaceChildren();
-        await renderPasskeyCard(passkeyCard);
+        await renderPasskeyCard(passkeyCard, () => renderSignInChanges(container.querySelector('#sign-in-changes')));
       }
+      void renderSignInChanges(container.querySelector('#sign-in-changes'));
       window.yuvomi?.showToast(t('settings.passwordSavedToast'), 'success');
     } catch (error) {
       // Ein falsches aktuelles Passwort ist ein 400 mit Grund (server/auth.js),
@@ -1138,7 +1142,11 @@ export async function render(container, { user }) {
     container.querySelector('#account-retry')?.addEventListener('click', () => {
       render(container, { user: currentUser });
     });
-    await renderPasskeyCard(container.querySelector('#passkeys-card'));
+    const history = container.querySelector('#sign-in-changes');
+    await Promise.all([
+      renderPasskeyCard(container.querySelector('#passkeys-card'), () => renderSignInChanges(history)),
+      renderSignInChanges(history),
+    ]);
     window.lucide?.createIcons({ el: container });
   } catch (error) {
     container.replaceChildren();

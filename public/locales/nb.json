@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "Bekreft med en tilgangsnøkkel",
         "passwordChangeWarning": "Når du endrer passordet, fjernes alle passnøklene dine. Legg dem til igjen etterpå.",
         "removed": "Passnøkkel fjernet."
+    },
+    "signInChanges": {
+        "title": "Påloggingsendringer",
+        "empty": "Ingen nylige endringer av påloggingsmetodene dine.",
+        "unavailable": "Kunne ikke laste påloggingsendringene.",
+        "unknownDevice": "Ukjent enhet",
+        "two_factor_enabled": "Tofaktorautentisering er aktivert.",
+        "two_factor_disabled": "Tofaktorautentisering er deaktivert.",
+        "passkey_added": "Tilgangsnøkkel lagt til.",
+        "passkey_removed": "Passnøkkel fjernet.",
+        "password_changed": "Passordet ble endret."
     }
 }

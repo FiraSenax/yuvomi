@@ -6975,5 +6975,16 @@
         "confirmWithPasskey": "パスキーで確認",
         "passwordChangeWarning": "パスワードを変更すると、すべてのパスキーが削除されます。変更後に再登録してください。",
         "removed": "パスキーを削除しました。"
+    },
+    "signInChanges": {
+        "title": "ログイン方法の変更",
+        "empty": "最近のログイン方法の変更はありません。",
+        "unavailable": "ログイン方法の変更を読み込めませんでした。",
+        "unknownDevice": "不明なデバイス",
+        "two_factor_enabled": "二要素認証が有効になりました。",
+        "two_factor_disabled": "二要素認証が無効になりました。",
+        "passkey_added": "パスキーを追加しました。",
+        "passkey_removed": "パスキーを削除しました。",
+        "password_changed": "パスワードを変更しました。"
     }
 }

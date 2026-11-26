@@ -11,8 +11,10 @@ import { setInitialsRoster, clearInitialsRoster } from '/utils/initials.js';
 import { forgetLayoutHint } from '/utils/dashboard-layout-hint.js';
 import { t } from '/i18n.js';
 import { REFUSAL_MESSAGES } from '/utils/friendly-error.js';
+import { currentPushFingerprint } from '/utils/push-fingerprint.js';
 
 const API_BASE = '/api/v1';
+const SIGN_IN_CHANGE_PATH = /^\/auth\/(?:me\/password|reset-password|users\/\d+|2fa\/(?:enable|disable)|passkeys\/(?:register\/verify|\d+))$/;
 
 /** Der Grund, mit dem `server/middleware/csrf.js` ein ungueltiges Token ablehnt. */
 const CSRF_INVALID_REASON = 'csrf_invalid';
@@ -76,16 +78,20 @@ async function apiFetch(path, options = {}, _retried = false) {
       const answer = await early.catch(() => null);
       if (answer?.ok) response = answer;
     }
-    if (!response) response = await fetch(url, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      ...fetchOptions,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(stateChanging ? { 'X-CSRF-Token': getCsrfToken() } : {}),
-        ...optionHeaders,
-      },
-    });
+    if (!response) {
+      const fingerprint = stateChanging && SIGN_IN_CHANGE_PATH.test(path) ? await currentPushFingerprint() : undefined;
+      response = await fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        ...fetchOptions,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(stateChanging ? { 'X-CSRF-Token': getCsrfToken() } : {}),
+          ...(fingerprint ? { 'X-Push-Subscription-Fingerprint': fingerprint } : {}),
+          ...optionHeaders,
+        },
+      });
+    }
   } catch (err) {
     // Vom Aufrufer abgebrochen (`{ signal }`): kein Netzfehler und schon gar
     // kein "offline" - siehe ApiAbortError.
