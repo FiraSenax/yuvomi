@@ -50,13 +50,15 @@ async function reauthenticate(state) {
           if (busy || finished) return;
           const code = /** @type {HTMLInputElement|null} */ (panel.querySelector('#passkey-reauth-code'));
           password.required = method === 'password';
+          if (code) code.required = method === 'password';
           const invalid = reportFieldErrors(constraintErrors(form));
           password.required = true;
+          if (code) code.required = true;
           if (invalid) return;
           busy = true;
           /** @type {{method:"password"|"passkey",code?:string,password?:string,credential?:Awaited<ReturnType<typeof usePasskey>>}} */
           const proof = { method };
-          if (code) proof.code = code.value.trim();
+          if (code && method === 'password') proof.code = code.value.trim();
           for (const button of buttons) button.disabled = true;
           status.textContent = t('login.twoFactorChecking');
           try {

@@ -358,9 +358,12 @@ test('JEDER Weg in eine Sitzung prueft den zweiten Faktor - auch SSO', () => {
     const header = lines[start];
     callers.push(header.trim().slice(0, 48));
 
-    // Die Verify-Route ist selbst die Pruefung.
+    // Code verification and required WebAuthn UV supply their own proof.
     if (header.includes("'/2fa/verify'")) return;
-    if (lines.slice(start, index).join('\n').includes('twoFactor.isEnabled')) return;
+    const beforeSession = lines.slice(start, index).join('\n');
+    if (header.includes("'/passkeys/login/verify'") && beforeSession.includes('await passkeys.finishAuthentication(')
+        && line.includes('setupAuthSession(req, res, user, true)')) return;
+    if (beforeSession.includes('twoFactor.isEnabled')) return;
 
     unguarded.push(`auth.js:${index + 1} (Route ab Zeile ${start + 1}: ${header.trim().slice(0, 60)})`);
   });
@@ -375,7 +378,7 @@ test('JEDER Weg in eine Sitzung prueft den zweiten Faktor - auch SSO', () => {
   // Eine leere Liste ist fuer sich keine Zusicherung: sie waere auch leer,
   // wenn der Suchbegriff nicht mehr passte. Deshalb die Gegenprobe, dass
   // ueberhaupt die erwarteten Wege gefunden wurden.
-  assert.equal(callers.length, 4, `erwartet werden drei Anmeldewege, gefunden: ${callers.join(' | ')}`);
+  assert.equal(callers.length, 4, `expected four sign-in call sites, gefunden: ${callers.join(' | ')}`);
   assert.ok(callers.some((c) => c.includes("'/passkeys/login/verify'")), 'passkey sign-in route was not found');
   assert.ok(callers.some((c) => c.includes("'/login'")), 'der Passwort-Login wurde nicht gefunden');
   assert.ok(callers.some((c) => c.includes("'/oidc/callback'")), 'der OIDC-Callback wurde nicht gefunden');

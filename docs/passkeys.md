@@ -21,11 +21,12 @@ or biometric data. Your authenticator or password manager manages the private ke
 3. Open **Settings > Account > Passkeys**, give the passkey a name and add it.
    Confirm on your device. Changes require a sign-in within the last five minutes;
    if asked, confirm your password or an existing passkey directly in the dialog.
-   Enter a fresh TOTP or unused recovery code as well if two-factor authentication
-   is enabled. Your name input is kept and the pending action continues after confirmation.
+   Password confirmation also needs a fresh TOTP or unused recovery code if your
+   authenticator app is enabled. A passkey verifies you on your device. The dialog
+   keeps the name you entered and continues the action after confirmation.
    SSO-only accounts must still use their normal SSO sign-in.
-4. Sign out and choose **Sign in with a passkey**. No username is needed. If your
-   account has two-factor authentication enabled, then enter a TOTP or recovery code.
+4. Sign out and choose **Sign in with a passkey**. Complete your device's PIN or
+   biometric prompt. User verification satisfies two-factor authentication.
 
 You can register up to ten passkeys per account. Use more than one authenticator
 or a passkey provider with a recovery mechanism you understand. Keep your existing
@@ -41,7 +42,9 @@ just as native password sign-in is; the existing external-expense guest exceptio
 still applies. Accounts explicitly configured as SSO-only also cannot enroll or
 use native passkeys, independently of the household-wide switch. A passkey does not
 bypass account deactivation, access restrictions or the SSO-only policy. The
-configured two-factor step applies to passkey, password and SSO sign-in.
+configured two-factor code applies to password and SSO sign-in. The household
+option to require an authenticator app still asks members to set it up and prevents
+turning it off. A user-verified passkey works as a parallel sign-in method.
 Shared-expense guests cannot manage passkeys. A browser with an existing guest
 session can still start a fresh passkey sign-in, which requires valid credential
 proof before changing the signed-in identity. Native device credentials, scoped
@@ -55,8 +58,10 @@ Changing or resetting your password, an administrator setting a password, or the
 administrator's emergency device sign-out removes
 all your passkeys and pending registrations. Add replacement passkeys after recovery.
 This also blocks a registration already being verified when recovery happens.
-Enabling TOTP keeps your passkeys and ends other sessions. Those passkeys can only
-complete sign-in or inline confirmation with the configured second factor.
+Enabling the authenticator app removes passkeys added earlier, cancels pending
+registrations and ends other sessions. Add replacement passkeys after confirming
+the setup code. On upgrade to the passkey MFA policy, accounts already using
+TOTP also need to add replacement keys. Their account history records the removal.
 Removing one passkey ends your other browser sessions and native device credentials,
 while keeping the current browser and remaining passkeys. Ordinary “sign out other
 devices” retains passkeys; for a compromised credential use password recovery or ask
@@ -86,6 +91,10 @@ without a runtime frontend package. Discoverable credentials and user verificati
 are required. Registration and assertion challenges last five minutes, are bound
 to the browser session and purpose, and are consumed in SQLite before verification.
 Sign-in regenerates the session using the same helper as password and OIDC sign-in.
+The server checks the signed WebAuthn user-verification flag. The authenticator
+proves control of the credential and verifies the person locally. The signature
+is bound to Yuvomi's origin and challenge, which gives resistance to phishing.
+[NIST SP 800-63B-4, Syncable Authenticators](https://pages.nist.gov/800-63-4/sp800-63b/syncable/#implementation-requirements)
 Registration and removal require session authentication, CSRF and recent sign-in;
 all WebAuthn POSTs require the configured Origin.
 

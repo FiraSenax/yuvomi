@@ -215,11 +215,25 @@ export async function finishAuthentication(database, sessionId, response, userId
     credential: { id: row.credential_id, publicKey: new Uint8Array(row.public_key), counter: row.counter, transports: JSON.parse(row.transports) },
     requireUserVerification: true,
   });
-  if (!result.verified) throw fail();
-  // A concurrent use or deletion must not be overwritten after verification.
+  if (!result.verified || !result.authenticationInfo.userVerified) throw fail();
+  // Bind the update to the verified credential as well as the row and counter:
+  // a replacement passkey can reuse a deleted row's integer ID.
   const changed = database.prepare(`UPDATE user_passkeys SET counter = ?, last_used_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
-    updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND counter = ?`)
-    .run(result.authenticationInfo.newCounter, row.id, row.counter).changes;
+    updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND user_id = ? AND credential_id = ? AND counter = ?`)
+    .run(result.authenticationInfo.newCounter, row.id, row.user_id, row.credential_id, row.counter).changes;
   if (!changed) throw fail();
-  return { userId: row.user_id };
+  return { userId: row.user_id, credentialId: row.credential_id, userHandle: row.user_handle };
+}
+
+/**
+ * Check the assertion's credential again after the verifier has returned to
+ * the caller, before refreshing a session or creating a new one.
+ * @param {Database} database
+ * @param {{userId:number, credentialId:string, userHandle:string}} proof
+ */
+export function isCurrentAuthentication(database, proof) {
+  return !!database.prepare(`
+    SELECT 1 FROM user_passkeys p JOIN user_passkey_handles h ON h.user_id = p.user_id
+     WHERE p.user_id = ? AND p.credential_id = ? AND h.user_handle = ?
+  `).get(proof.userId, proof.credentialId, proof.userHandle);
 }
